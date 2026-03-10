@@ -40,6 +40,8 @@ def analyze_match(
     injuries: list[dict] | None = None,
     standings_context: str | None = None,
     competition_stage: str | None = None,
+    rich_context: dict | None = None,
+    form_data: dict | None = None,
 ) -> dict:
     """Analiza un partido con Claude y devuelve ajustes acotados.
 
@@ -50,6 +52,8 @@ def analyze_match(
         injuries: Lista de lesiones/sanciones.
         standings_context: Posición en la tabla y contexto competitivo.
         competition_stage: Fase de la competición (grupos, octavos, etc.).
+        rich_context: Contexto enriquecido del módulo context.py.
+        form_data: Datos de forma reciente de cada equipo.
 
     Returns:
         Dict con ajustes y análisis.
@@ -60,6 +64,7 @@ def analyze_match(
     user_message = _build_prompt(
         home_team, away_team, ml_probabilities,
         injuries, standings_context, competition_stage,
+        rich_context, form_data,
     )
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
@@ -98,6 +103,8 @@ def _build_prompt(
     injuries: list[dict] | None,
     standings: str | None,
     stage: str | None,
+    rich_context: dict | None = None,
+    form_data: dict | None = None,
 ) -> str:
     parts = [
         f"PARTIDO: {home_team} (local) vs {away_team} (visitante)",
@@ -108,15 +115,56 @@ def _build_prompt(
         parts.append(f"FASE: {stage}")
     if standings:
         parts.append(f"CONTEXTO CLASIFICACIÓN: {standings}")
+
+    # Forma reciente (datos duros del modelo)
+    if form_data:
+        for side, label in [("home", "LOCAL"), ("away", "VISITANTE")]:
+            team_form = form_data.get(side, {})
+            if team_form.get("last_matches"):
+                matches_str = " | ".join(team_form["last_matches"][:5])
+                parts.append(f"FORMA {label}: {matches_str}")
+            if team_form.get("momentum") is not None:
+                m = team_form["momentum"]
+                trend = "en alza" if m > 0 else "en baja" if m < 0 else "estable"
+                parts.append(f"TENDENCIA {label}: {trend} (momentum: {m:+.2f})")
+
+    # Lesiones de la API
     if injuries:
         injury_text = "\n".join(
-            f"  - {inj.get('player', {}).get('name', '?')} ({inj.get('team', {}).get('name', '?')}): {inj.get('type', '?')}"
+            f"  - {inj.get('player', {}).get('name', '?')} ({inj.get('team', {}).get('name', '?')}): {inj.get('type', '?')} [impacto: {inj.get('impact', '?')}]"
             for inj in injuries[:10]
         )
         parts.append(f"LESIONES/SANCIONES:\n{injury_text}")
 
+    # Contexto enriquecido (del módulo context.py / Claude research)
+    if rich_context:
+        for side_key, label in [("home_team", "LOCAL"), ("away_team", "VISITANTE")]:
+            team_ctx = rich_context.get(side_key, {})
+            ctx_parts = []
+            if team_ctx.get("form_narrative"):
+                ctx_parts.append(f"Estado: {team_ctx['form_narrative']}")
+            if team_ctx.get("tactical_notes"):
+                ctx_parts.append(f"Táctica: {team_ctx['tactical_notes']}")
+            if team_ctx.get("motivation"):
+                ctx_parts.append(f"Motivación: {team_ctx['motivation']}")
+            if team_ctx.get("news"):
+                ctx_parts.append(f"Noticias: {'; '.join(team_ctx['news'][:3])}")
+            if team_ctx.get("key_absences_impact"):
+                ctx_parts.append(f"Impacto bajas: {team_ctx['key_absences_impact']}")
+            if ctx_parts:
+                parts.append(f"CONTEXTO {label}:\n  " + "\n  ".join(ctx_parts))
+
+        match_ctx = rich_context.get("match_context", {})
+        if match_ctx.get("stakes"):
+            parts.append(f"EN JUEGO: {match_ctx['stakes']}")
+        if match_ctx.get("historical_notes"):
+            parts.append(f"HISTORIAL: {match_ctx['historical_notes']}")
+        if match_ctx.get("external_factors"):
+            parts.append(f"FACTORES EXTERNOS: {match_ctx['external_factors']}")
+
     parts.append(
-        "Analiza el contexto y sugiere ajustes a las probabilidades ML. "
+        "Analiza TODA la información contextual y sugiere ajustes a las probabilidades ML. "
+        "Presta especial atención a lesiones de jugadores clave y al momento de forma. "
         "Responde en JSON."
     )
     return "\n\n".join(parts)
