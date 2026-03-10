@@ -1,0 +1,23 @@
+# Data
+pandas>=2.0
+numpy>=1.24
+requests>=2.31
+soccerdata>=1.0
+
+# ML
+scikit-learn>=1.3
+xgboost>=2.0
+catboost>=1.2
+
+# Statistics
+scipy>=1.11
+
+# LLM
+anthropic>=0.39
+
+# CLI
+click>=8.1
+rich>=13.0
+
+# Config
+python-dotenv>=1.0
