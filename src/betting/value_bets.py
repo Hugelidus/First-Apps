@@ -23,6 +23,7 @@ def find_value_bets(
     """
     value_bets = []
 
+    market_labels = {"home": "Local", "draw": "Empate", "away": "Visitante"}
     for outcome in ["home", "draw", "away"]:
         prob = predictions.get(outcome, 0)
         odd = odds.get(outcome, 0)
@@ -34,6 +35,7 @@ def find_value_bets(
             stake_info = recommended_stake(bankroll, prob, odd)
             value_bets.append({
                 "outcome": outcome,
+                "market": market_labels[outcome],
                 **stake_info,
             })
 

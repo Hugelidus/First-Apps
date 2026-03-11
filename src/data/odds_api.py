@@ -5,7 +5,7 @@ import requests
 from src.config import ODDS_API_BASE, ODDS_API_KEY, CACHE_TTL_ODDS
 from src.data.cache import get_cached, set_cache
 
-SPORT_KEY = "soccer_uefa_champions_league"
+SPORT_KEY = "soccer_uefa_champs_league"
 
 
 def _get(endpoint: str, params: dict | None = None) -> list | dict:

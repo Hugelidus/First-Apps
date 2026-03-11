@@ -16,7 +16,7 @@ from src.utils.display import (
     console, show_prediction, show_fixtures_table, show_value_bets_summary,
 )
 
-CURRENT_SEASON = 2025
+CURRENT_SEASON = 2024
 
 
 @click.group()

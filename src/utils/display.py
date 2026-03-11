@@ -75,6 +75,40 @@ def show_prediction(
 
     # Análisis LLM
     if llm_analysis and llm_analysis.get("analysis"):
+        # Stats detalladas si las hay
+        stats = llm_analysis.get("stats")
+        if stats:
+            st = Table(title="Estadisticas Recientes (via IA)", show_header=True)
+            st.add_column("", justify="left", style="dim")
+            st.add_column(home_team, justify="center", style="green")
+            st.add_column(away_team, justify="center", style="red")
+
+            home_st = stats.get("home", {})
+            away_st = stats.get("away", {})
+
+            rows = [
+                ("Forma", home_st.get("form", "-"), away_st.get("form", "-")),
+                ("Goles/partido", _fmt_num(home_st.get("goals_per_match")), _fmt_num(away_st.get("goals_per_match"))),
+                ("Tiros a puerta/p", _fmt_num(home_st.get("shots_on_target_per_match")), _fmt_num(away_st.get("shots_on_target_per_match"))),
+                ("Paradas GK/p", _fmt_num(home_st.get("goalkeeper_saves_per_match")), _fmt_num(away_st.get("goalkeeper_saves_per_match"))),
+                ("Valla invicta", str(home_st.get("clean_sheets", "-")), str(away_st.get("clean_sheets", "-"))),
+            ]
+
+            for label, hv, av in rows:
+                st.add_row(label, hv, av)
+
+            # Bajas
+            h_abs = home_st.get("key_absences", [])
+            a_abs = away_st.get("key_absences", [])
+            if h_abs or a_abs:
+                st.add_row(
+                    "Bajas clave",
+                    ", ".join(h_abs) if h_abs else "-",
+                    ", ".join(a_abs) if a_abs else "-",
+                )
+
+            console.print(st)
+
         console.print(Panel(
             llm_analysis["analysis"],
             title=f"Analisis IA [confianza: {llm_analysis.get('confidence', '?')}]",
@@ -85,6 +119,15 @@ def show_prediction(
                 console.print(f"  [blue]>[/blue] {factor}")
 
     console.print()
+
+
+def _fmt_num(val) -> str:
+    """Formatea un número o devuelve '-'."""
+    if val is None:
+        return "-"
+    if isinstance(val, (int, float)):
+        return f"{val:.1f}"
+    return str(val)
 
 
 def show_fixtures_table(fixtures: list[dict]):
