@@ -5,14 +5,16 @@ Plan de implementación por fases. Cada fase termina con un commit.
 
 Estado:
 - [x] Fase 0 — Limpieza del repo y documentación
-- [ ] Fase 1 — Bootstrap (deps, Docker, .env)
-- [ ] Fase 2 — Ingesta de fuentes
-- [ ] Fase 3 — Pipeline de procesado (chunker, tiers, canon, spoilers)
-- [ ] Fase 4 — Embeddings + storage en Qdrant
-- [ ] Fase 5 — Retriever híbrido con filtros
-- [ ] Fase 6 — Chat engine
-- [ ] Fase 7 — CLI
-- [ ] Fase 8 — Acceptance test manual con las 8 preguntas
+- [x] Fase 1 — Bootstrap (deps, Docker, .env)
+- [x] Fase 2 — Ingesta de fuentes (código + tests)
+- [x] Fase 3 — Pipeline de procesado (chunker, tiers, canon, spoilers)
+- [x] Fase 4 — Embeddings + storage en Qdrant
+- [x] Fase 5 — Retriever híbrido con filtros
+- [x] Fase 6 — Chat engine
+- [x] Fase 7 — CLI
+- [ ] Fase 8 — Acceptance test manual con las 8 preguntas (pendiente:
+      requiere docker corriendo + ANTHROPIC_API_KEY; runbook en
+      `docs/ACCEPTANCE.md`)
 
 ---
 

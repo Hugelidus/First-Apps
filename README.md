@@ -8,8 +8,8 @@ García Sáenz de Urturi).
 Arquitectura: RAG con Qdrant + embeddings BGE-m3 + Claude. Sin
 LangChain, sin LlamaIndex.
 
-> ⚠️ Estado: **fase 1 — bootstrap**. Aún no hay datos cargados ni chat
-> funcional. Ver `PLAN.md` para el plan completo.
+> Estado: **fases 1–8 implementadas**. Falta correr el acceptance test
+> en una máquina con docker + ANTHROPIC_API_KEY. Ver `docs/ACCEPTANCE.md`.
 
 ---
 
@@ -43,14 +43,31 @@ curl -fsS http://localhost:6333/healthz   # → "healthz check passed"
 La primera vez que se use el embedder, `sentence-transformers`
 descargará BGE-m3 (~1.5 GB) en `~/.cache/huggingface/`.
 
-## Uso (cuando esté disponible — fases 6+)
+## Uso
+
+### Camino corto (corpus mínimo offline)
+
+Para arrancar sin esperar a tener red para los scrapers:
 
 ```bash
-# Poblar la base con las 3 fuentes mínimas
-uv run python scripts/seed_kraken.py
-
-# Abrir el chat
+uv run python scripts/bootstrap_canonical.py
+uv run python scripts/seed_kraken.py --skip-scrape --recreate
 uv run cinemaia chat --modo pre
+```
+
+### Camino completo (con scraping)
+
+```bash
+uv run python scripts/seed_kraken.py --recreate
+uv run cinemaia info        # comprueba el corpus
+uv run cinemaia chat --modo pre
+```
+
+Más utilidades:
+
+```bash
+uv run cinemaia info                              # estado del corpus
+uv run cinemaia export-no-se --out /tmp/ns.json   # exporta log "no sé"
 ```
 
 Comandos del chat:
@@ -100,6 +117,15 @@ Documentadas íntegramente en [`CLAUDE.md`](./CLAUDE.md). En resumen:
 ```bash
 uv run pytest
 ```
+
+33 deben pasar; 1 se salta salvo que `ANTHROPIC_API_KEY` esté en el
+entorno (entonces corre el test del clasificador real contra fixtures).
+
+## Acceptance test
+
+El procedimiento completo de validación (las 8 preguntas de §10 de
+`CLAUDE.md` en cada modo, comprobación de `:debug`, `:nose`, etc.)
+está en [`docs/ACCEPTANCE.md`](./docs/ACCEPTANCE.md).
 
 ## Licencia
 
