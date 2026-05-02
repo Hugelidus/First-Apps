@@ -7,6 +7,11 @@ from typing import Literal
 OrigenCanon = Literal["pelicula", "novela", "ambas"]
 
 CANON_BY_FUENTE: dict[str, OrigenCanon] = {
+    # Canónicas internas (sembradas con bootstrap_canonical.py)
+    "canonical_ficha": "pelicula",
+    "canonical_premisa": "pelicula",
+    "canonical_saga": "ambas",
+    # Externas
     "wikipedia_pelicula": "pelicula",
     "festival_malaga": "pelicula",
     "rtve": "pelicula",

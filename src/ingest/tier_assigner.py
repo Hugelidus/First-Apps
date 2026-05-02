@@ -4,6 +4,11 @@ from __future__ import annotations
 
 # Mapeo declarativo: fuente_slug → tier.
 TIER_BY_FUENTE: dict[str, int] = {
+    # Canónicas internas (sembradas con bootstrap_canonical.py)
+    "canonical_ficha": 1,
+    "canonical_premisa": 1,
+    "canonical_saga": 1,
+    # Externas
     "wikipedia_pelicula": 1,
     "wikipedia_novela": 1,
     "festival_malaga": 1,

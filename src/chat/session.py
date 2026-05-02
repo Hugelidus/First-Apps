@@ -38,7 +38,7 @@ class Session:
 
     modo: Modo = "pre_cine"
     history: list[Turn] = field(default_factory=list)
-    no_se_log_path: Path = DEFAULT_NO_SE_PATH
+    no_se_log_path: Path = field(default_factory=lambda: DEFAULT_NO_SE_PATH)
 
     def set_modo(self, modo: Modo) -> None:
         """Cambia el modo sin perder historial."""
