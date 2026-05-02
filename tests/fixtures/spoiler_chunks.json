@@ -1,0 +1,42 @@
+[
+  {
+    "expected_level": 0,
+    "text": "Kraken. El libro negro de las horas es una película española de 2026 dirigida por Manuel Sanabria y Joaquín Llamas. Está protagonizada por Alejo Sauras y Maggie Civantos. Pertenece al género de thriller policíaco."
+  },
+  {
+    "expected_level": 0,
+    "text": "Unai, exinspector y experto en perfiles criminales, recibe una llamada anónima en la que se le anuncia que tiene siete días para encontrar el legendario Libro Negro de las Horas o su madre, a la que creía muerta hace décadas, morirá."
+  },
+  {
+    "expected_level": 0,
+    "text": "La película es una adaptación de la novela homónima de Eva García Sáenz de Urturi, cuarto título de la saga del inspector Unai López de Ayala, alias Kraken, iniciada con 'El silencio de la ciudad blanca'."
+  },
+  {
+    "expected_level": 1,
+    "text": "Durante la búsqueda en Madrid, Unai contacta con el coleccionista de incunables Tasio Ortiz, antiguo enemigo del primer libro, que conserva pistas sobre la procedencia del Libro Negro y le presenta a una bibliófila enigmática llamada Helena."
+  },
+  {
+    "expected_level": 1,
+    "text": "Esti acompaña a Unai en una excursión a un caserío de las afueras de Vitoria donde se reabren heridas de un caso anterior y aparece un mensaje cifrado escrito con pintura roja, que les obliga a viajar a Madrid antes de lo previsto."
+  },
+  {
+    "expected_level": 2,
+    "text": "En el desenlace se descubre que la madre de Unai nunca estuvo muerta: fingió su desaparición en los años 70 para protegerle de su propia familia, vinculada a la cofradía que custodia el Libro Negro. Unai la encuentra viva en una casa rural cerca de Toledo."
+  },
+  {
+    "expected_level": 2,
+    "text": "El antagonista principal resulta ser Tasio, que durante toda la trama ha manipulado a Unai para conseguir el libro. Esti muere en el enfrentamiento final, lo que destroza a Unai y cierra la saga con un tono trágico."
+  },
+  {
+    "expected_level": 2,
+    "text": "El último plano revela que Helena, la bibliófila que parecía aliada, era en realidad la nieta del autor original del Libro Negro y la única capaz de descifrar sus páginas, dejando abierta la posibilidad de un spin-off."
+  },
+  {
+    "expected_level": 0,
+    "text": "El estreno tuvo lugar el 24 de abril de 2026 en cines españoles, distribuido por Vértice 360. La producción corrió a cargo de Isla Audiovisual y Zebra, con la participación de Prime Video y RTVE."
+  },
+  {
+    "expected_level": 1,
+    "text": "El guion divide la narración en dos líneas temporales: el presente en Vitoria y Madrid en 2022, y unos flashbacks de los años 70 que muestran la juventud de la madre de Unai en una sociedad bibliófila clandestina."
+  }
+]

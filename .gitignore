@@ -9,5 +9,13 @@ venv/
 .vscode/
 .idea/
 .DS_Store
-data/cache/
 *.db
+
+# CinemaIA
+data/raw/*
+!data/raw/.gitkeep
+.uv-cache/
+.cache/
+.pytest_cache/
+.ruff_cache/
+qdrant_storage/

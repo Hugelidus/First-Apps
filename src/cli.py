@@ -1,206 +1,221 @@
-"""CLI principal del sistema de pronósticos deportivos."""
+"""CLI de CinemaIA: chat interactivo + comandos auxiliares."""
 
-import click
-from rich.console import Console
+from __future__ import annotations
 
-from src.config import BANKROLL, API_FOOTBALL_KEY, ODDS_API_KEY, ANTHROPIC_API_KEY
-from src.data import api_football, odds_api, football_data
-from src.features.ratings import EloRating, PiRating
-from src.features.form import home_away_form, momentum
-from src.features.stats import attack_defense_strength, head_to_head_stats
-from src.models.goals_model import GoalsModel
-from src.llm.analyzer import analyze_match, apply_adjustments
-from src.betting.value_bets import find_value_bets, find_over_under_value, best_odds
-from src.betting.kelly import recommended_stake
-from src.utils.display import (
-    console, show_prediction, show_fixtures_table, show_value_bets_summary,
+import json
+import logging
+import sys
+from pathlib import Path
+from typing import Optional
+
+import typer
+
+from src.config import setup_logging
+from src.chat.engine import ChatEngine
+from src.chat.session import Modo, Session
+from src.ingest.pipeline import load_processed_chunks
+from src.retrieval.retriever import HybridRetriever
+
+app = typer.Typer(
+    name="cinemaia",
+    help="Chat sobre 'Kraken. El libro negro de las horas' (MVP1).",
+    no_args_is_help=True,
+    add_completion=False,
 )
 
-CURRENT_SEASON = 2024
+logger = logging.getLogger(__name__)
+
+HELP = """\
+Comandos durante el chat:
+  :modo pre|durante|post   Cambia el nivel de spoiler.
+  :debug on|off            Muestra los chunks recuperados con tier/spoiler.
+  :nose                    Vuelca el log de preguntas sin respuesta.
+  :ayuda                   Muestra esta ayuda.
+  :salir                   Termina la sesión (también Ctrl-D).
+"""
+
+_MODOS_ALIAS: dict[str, Modo] = {
+    "pre": "pre_cine",
+    "pre_cine": "pre_cine",
+    "durante": "durante",
+    "post": "post_cine",
+    "post_cine": "post_cine",
+}
 
 
-@click.group()
-def cli():
-    """Sistema de Pronosticos Deportivos - Champions League"""
-    pass
+def _print(msg: str) -> None:
+    typer.echo(msg)
 
 
-@cli.command()
-def status():
-    """Muestra el estado de las APIs configuradas."""
-    console.print("\n[bold]Estado de APIs:[/bold]")
-    apis = {
-        "API-Football": bool(API_FOOTBALL_KEY),
-        "The Odds API": bool(ODDS_API_KEY),
-        "Anthropic (Claude)": bool(ANTHROPIC_API_KEY),
-    }
-    for name, configured in apis.items():
-        icon = "[green]OK[/green]" if configured else "[red]NO CONFIGURADA[/red]"
-        console.print(f"  {name}: {icon}")
-    console.print(f"\n  Bankroll: ${BANKROLL:.2f}")
-    console.print()
+def _format_chunks(chunks) -> str:
+    if not chunks:
+        return "  (sin chunks recuperados)"
+    lines = []
+    for i, c in enumerate(chunks, 1):
+        lines.append(
+            f"  [{i}] tier={c.tier} spoiler={c.spoiler_level} "
+            f"canon={c.origen_canon} fuente={c.fuente} "
+            f"bm25={c.bm25_score:.2f} dense={c.dense_score:.2f}"
+        )
+        snippet = c.text.replace("\n", " ")
+        if len(snippet) > 160:
+            snippet = snippet[:157] + "..."
+        lines.append(f"      {snippet}")
+    return "\n".join(lines)
 
 
-@cli.command()
-def proximos():
-    """Muestra los próximos partidos de Champions League."""
-    console.print("\n[bold]Obteniendo proximos partidos...[/bold]")
+@app.command()
+def chat(
+    modo: str = typer.Option(
+        "pre",
+        "--modo",
+        "-m",
+        help="Nivel de spoiler inicial: pre, durante o post.",
+    ),
+    debug: bool = typer.Option(
+        False, "--debug", help="Muestra chunks recuperados en cada turno."
+    ),
+) -> None:
+    """Abre el chat interactivo."""
+    setup_logging()
+    if modo not in _MODOS_ALIAS:
+        _print(f"Modo inválido: {modo}. Usa pre, durante o post.")
+        raise typer.Exit(code=2)
+    session = Session(modo=_MODOS_ALIAS[modo])
+
+    chunks = load_processed_chunks()
+    if not chunks:
+        _print(
+            "⚠️  data/processed/chunks.jsonl está vacío. "
+            "Ejecuta 'uv run python scripts/seed_kraken.py' antes."
+        )
+        raise typer.Exit(code=3)
+
+    retriever = HybridRetriever(chunks=chunks)
     try:
-        fixtures = api_football.get_upcoming_fixtures(CURRENT_SEASON)
-        if not fixtures:
-            console.print("[yellow]No hay partidos proximos programados.[/yellow]")
-            return
-        show_fixtures_table(fixtures[:20])
-    except Exception as e:
-        console.print(f"[red]Error obteniendo partidos: {e}[/red]")
-        console.print("[dim]Verifica tu API_FOOTBALL_KEY en el archivo .env[/dim]")
+        engine = ChatEngine(retriever=retriever)
+    except Exception as e:  # noqa: BLE001
+        _print(f"No se pudo inicializar el cliente Anthropic: {e}")
+        _print("Comprueba que ANTHROPIC_API_KEY está en .env.")
+        raise typer.Exit(code=4) from e
 
+    _print(f"CinemaIA ▸ Kraken. Modo: {session.modo}. Comandos con ':'. Ctrl-D para salir.")
+    if debug:
+        _print("(modo debug activado)")
 
-@cli.command()
-@click.argument("home_team")
-@click.argument("away_team")
-@click.option("--con-ia/--sin-ia", default=True, help="Incluir análisis de Claude")
-def analizar(home_team: str, away_team: str, con_ia: bool):
-    """Análisis completo de un partido específico."""
-    console.print(f"\n[bold]Analizando: {home_team} vs {away_team}[/bold]\n")
-
-    # Inicializar modelos
-    pi = PiRating()
-    elo = EloRating()
-    goals_model = GoalsModel()
-
-    # Predicción de goles con Pi-ratings
-    lambda_home, lambda_away = pi.predict_goals(home_team, away_team)
-    goals_pred = goals_model.predict(lambda_home, lambda_away)
-
-    # Probabilidades 1X2
-    probs = goals_pred["result_1x2"]
-
-    # Análisis LLM
-    llm_result = None
-    final_probs = probs
-    if con_ia:
-        console.print("[dim]Consultando analisis contextual con IA...[/dim]")
+    while True:
         try:
-            llm_result = analyze_match(
-                home_team, away_team, probs,
-                competition_stage="Champions League",
-            )
-            if llm_result.get("adjustments"):
-                final_probs = apply_adjustments(probs, llm_result["adjustments"])
-        except Exception as e:
-            console.print(f"[dim]Analisis IA no disponible: {e}[/dim]")
+            line = input("> ").strip()
+        except (EOFError, KeyboardInterrupt):
+            _print("\nHasta otra.")
+            return
 
-    # Buscar value bets (necesita cuotas reales)
-    value_bets = []
-    try:
-        odds_data = odds_api.get_odds_1x2()
-        # Buscar cuotas del partido
-        for event in odds_data:
-            event_home = event.get("home_team", "").lower()
-            event_away = event.get("away_team", "").lower()
-            if home_team.lower() in event_home or away_team.lower() in event_away:
-                for bookmaker in event.get("bookmakers", []):
-                    for market in bookmaker.get("markets", []):
-                        if market.get("key") == "h2h":
-                            outcomes = market.get("outcomes", [])
-                            odds_dict = {}
-                            for o in outcomes:
-                                name = o.get("name", "").lower()
-                                price = o.get("price", 0)
-                                if "home" in name or home_team.lower() in name.lower():
-                                    odds_dict["home"] = price
-                                elif "draw" in name:
-                                    odds_dict["draw"] = price
-                                else:
-                                    odds_dict["away"] = price
-                            if odds_dict:
-                                value_bets = find_value_bets(final_probs, odds_dict)
-                                break
-                break
-    except Exception:
-        pass  # Sin cuotas disponibles, no hay value bets
+        if not line:
+            continue
 
-    show_prediction(home_team, away_team, final_probs, goals_pred, value_bets, llm_result)
+        if line.startswith(":"):
+            if not _handle_command(line, session, debug_holder=[debug]):
+                return
+            # Refrescar debug si cambió.
+            continue
+
+        try:
+            ans = engine.answer(line, session)
+        except Exception as e:  # noqa: BLE001
+            _print(f"Error llamando al modelo: {e}")
+            continue
+        _print(ans.text)
+        if debug:
+            _print("\n[debug] chunks recuperados:")
+            _print(_format_chunks(ans.retrieved))
 
 
-@cli.command()
-def valuebets():
-    """Detecta value bets en los próximos partidos."""
-    console.print("\n[bold]Buscando value bets...[/bold]\n")
-    console.print("[yellow]Necesitas API keys configuradas para obtener cuotas reales.[/yellow]")
-    console.print("[dim]Configura ODDS_API_KEY y API_FOOTBALL_KEY en .env[/dim]\n")
+def _handle_command(line: str, session: Session, *, debug_holder: list[bool]) -> bool:
+    """Procesa un comando ':...'. Devuelve False si la sesión debe terminar."""
+    parts = line[1:].split()
+    if not parts:
+        _print(HELP)
+        return True
+    cmd, args = parts[0].lower(), parts[1:]
+
+    if cmd in ("salir", "quit", "exit"):
+        _print("Hasta otra.")
+        return False
+
+    if cmd in ("ayuda", "help", "?"):
+        _print(HELP)
+        return True
+
+    if cmd == "modo":
+        if not args or args[0] not in _MODOS_ALIAS:
+            _print("Uso: :modo pre|durante|post")
+            return True
+        session.set_modo(_MODOS_ALIAS[args[0]])
+        _print(f"Modo: {session.modo}")
+        return True
+
+    if cmd == "debug":
+        if not args or args[0] not in ("on", "off"):
+            _print("Uso: :debug on|off")
+            return True
+        debug_holder[0] = args[0] == "on"
+        _print(f"Debug: {'on' if debug_holder[0] else 'off'}")
+        return True
+
+    if cmd == "nose":
+        records = session.read_no_se_log()
+        if not records:
+            _print("(no hay preguntas registradas como 'no sé')")
+            return True
+        _print(f"{len(records)} preguntas sin respuesta:")
+        for r in records[-20:]:
+            _print(f"  [{r.get('modo')}] {r.get('query')}")
+        return True
+
+    _print(f"Comando desconocido: :{cmd}. Escribe :ayuda para ver opciones.")
+    return True
 
 
-@cli.command()
-def clasificacion():
-    """Muestra la clasificación actual de Champions League."""
-    console.print("\n[bold]Obteniendo clasificacion...[/bold]")
-    try:
-        standings = football_data.get_standings()
-        if standings:
-            for group in standings:
-                table_name = group.get("group", group.get("stage", ""))
-                from rich.table import Table
-                t = Table(title=table_name, show_header=True)
-                t.add_column("Pos", justify="right", style="dim")
-                t.add_column("Equipo", justify="left")
-                t.add_column("PJ", justify="center")
-                t.add_column("G", justify="center")
-                t.add_column("E", justify="center")
-                t.add_column("P", justify="center")
-                t.add_column("GF", justify="center")
-                t.add_column("GC", justify="center")
-                t.add_column("Pts", justify="center", style="bold")
-                for entry in group.get("table", []):
-                    team = entry.get("team", {})
-                    t.add_row(
-                        str(entry.get("position", "")),
-                        team.get("name", "?"),
-                        str(entry.get("playedGames", 0)),
-                        str(entry.get("won", 0)),
-                        str(entry.get("draw", 0)),
-                        str(entry.get("lost", 0)),
-                        str(entry.get("goalsFor", 0)),
-                        str(entry.get("goalsAgainst", 0)),
-                        str(entry.get("points", 0)),
-                    )
-                console.print(t)
-        else:
-            console.print("[yellow]No se encontro clasificacion.[/yellow]")
-    except Exception as e:
-        console.print(f"[red]Error: {e}[/red]")
+@app.command()
+def info() -> None:
+    """Muestra el estado del corpus procesado."""
+    chunks = load_processed_chunks()
+    if not chunks:
+        _print("data/processed/chunks.jsonl no existe o está vacío.")
+        raise typer.Exit(code=1)
+
+    by_fuente: dict[str, int] = {}
+    by_spoiler: dict[int, int] = {0: 0, 1: 0, 2: 0}
+    by_canon: dict[str, int] = {}
+    by_tier: dict[int, int] = {}
+    for c in chunks:
+        by_fuente[c.fuente] = by_fuente.get(c.fuente, 0) + 1
+        by_spoiler[c.spoiler_level] = by_spoiler.get(c.spoiler_level, 0) + 1
+        by_canon[c.origen_canon] = by_canon.get(c.origen_canon, 0) + 1
+        by_tier[c.tier] = by_tier.get(c.tier, 0) + 1
+
+    _print(f"Total chunks: {len(chunks)}")
+    _print("Por fuente:    " + ", ".join(f"{k}={v}" for k, v in sorted(by_fuente.items())))
+    _print("Por tier:      " + ", ".join(f"t{k}={v}" for k, v in sorted(by_tier.items())))
+    _print("Por spoiler:   " + ", ".join(f"s{k}={v}" for k, v in sorted(by_spoiler.items())))
+    _print("Por canon:     " + ", ".join(f"{k}={v}" for k, v in sorted(by_canon.items())))
 
 
-@cli.command()
-def demo():
-    """Demo con datos de ejemplo (no requiere API keys)."""
-    console.print("\n[bold]DEMO - Datos de ejemplo[/bold]\n")
-
-    goals_model = GoalsModel()
-
-    # Simular un partido
-    matches = [
-        ("Real Madrid", "Bayern Munich", 1.8, 1.3),
-        ("Barcelona", "PSG", 1.6, 1.4),
-        ("Man City", "Inter Milan", 2.0, 0.9),
-    ]
-
-    for home, away, lh, la in matches:
-        pred = goals_model.predict(lh, la)
-
-        # Simular cuotas
-        odds = {
-            "home": round(1 / pred["result_1x2"]["home"], 2),
-            "draw": round(1 / pred["result_1x2"]["draw"], 2),
-            "away": round(1 / pred["result_1x2"]["away"], 2),
-        }
-        # Añadir margen de bookmaker (5%)
-        odds = {k: round(v * 0.95, 2) for k, v in odds.items()}
-
-        value_bets = find_value_bets(pred["result_1x2"], odds)
-        show_prediction(home, away, pred["result_1x2"], pred, value_bets)
+@app.command()
+def export_no_se(
+    out: Optional[Path] = typer.Option(None, "--out", "-o", help="Ruta de salida"),
+) -> None:
+    """Exporta el log completo de preguntas sin respuesta como JSON."""
+    sess = Session()
+    records = sess.read_no_se_log()
+    payload = json.dumps(records, ensure_ascii=False, indent=2)
+    if out:
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(payload, encoding="utf-8")
+        _print(f"Escritos {len(records)} registros en {out}")
+    else:
+        sys.stdout.write(payload + "\n")
 
 
 if __name__ == "__main__":
-    cli()
+    app()

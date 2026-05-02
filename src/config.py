@@ -1,43 +1,63 @@
-"""Configuración central del proyecto."""
+"""Carga de configuración desde variables de entorno (.env)."""
 
-import os
+from __future__ import annotations
+
+import logging
+from functools import lru_cache
 from pathlib import Path
 
-from dotenv import load_dotenv
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
-load_dotenv()
+ROOT_DIR = Path(__file__).resolve().parent.parent
+DATA_DIR = ROOT_DIR / "data"
+RAW_DIR = DATA_DIR / "raw"
+PROCESSED_DIR = DATA_DIR / "processed"
 
-# Rutas
-PROJECT_ROOT = Path(__file__).parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
-CACHE_DIR = DATA_DIR / "cache"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
-# API Keys
-API_FOOTBALL_KEY = os.getenv("API_FOOTBALL_KEY", "")
-ODDS_API_KEY = os.getenv("ODDS_API_KEY", "")
-FOOTBALL_DATA_KEY = os.getenv("FOOTBALL_DATA_KEY", "")
-ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
+class Settings(BaseSettings):
+    """Configuración global cargada desde .env."""
 
-# Bankroll
-BANKROLL = float(os.getenv("BANKROLL", "1000"))
-KELLY_FRACTION = float(os.getenv("KELLY_FRACTION", "0.25"))
+    model_config = SettingsConfigDict(
+        env_file=ROOT_DIR / ".env",
+        env_file_encoding="utf-8",
+        extra="ignore",
+    )
 
-# API-Football
-API_FOOTBALL_BASE = "https://v3.football.api-sports.io"
-API_FOOTBALL_HEADERS = {"x-apisports-key": API_FOOTBALL_KEY}
+    anthropic_api_key: str = Field(default="", alias="ANTHROPIC_API_KEY")
+    chat_model: str = Field(default="claude-sonnet-4-6", alias="CHAT_MODEL")
+    spoiler_model: str = Field(
+        default="claude-haiku-4-5-20251001", alias="SPOILER_MODEL"
+    )
 
-# The Odds API
-ODDS_API_BASE = "https://api.the-odds-api.com/v4"
+    qdrant_url: str = Field(default="http://localhost:6333", alias="QDRANT_URL")
+    qdrant_collection: str = Field(default="kraken", alias="QDRANT_COLLECTION")
 
-# Football-Data.org
-FOOTBALL_DATA_BASE = "https://api.football-data.org/v4"
-FOOTBALL_DATA_HEADERS = {"X-Auth-Token": FOOTBALL_DATA_KEY}
+    embed_model: str = Field(default="BAAI/bge-m3", alias="EMBED_MODEL")
+    embed_dim: int = Field(default=1024, alias="EMBED_DIM")
 
-# Champions League ID en API-Football
-CHAMPIONS_LEAGUE_ID = 2
+    http_user_agent: str = Field(
+        default="CinemaIA-MVP/0.1 (+https://github.com/Hugelidus/First-Apps)",
+        alias="HTTP_USER_AGENT",
+    )
+    http_rate_limit_per_host: float = Field(
+        default=1.0, alias="HTTP_RATE_LIMIT_PER_HOST"
+    )
 
-# Cache TTL en segundos
-CACHE_TTL_FIXTURES = 3600       # 1 hora
-CACHE_TTL_STATS = 86400         # 24 horas
-CACHE_TTL_ODDS = 1800           # 30 minutos
+    log_level: str = Field(default="INFO", alias="LOG_LEVEL")
+
+
+@lru_cache(maxsize=1)
+def get_settings() -> Settings:
+    """Devuelve la instancia única de Settings."""
+    return Settings()
+
+
+def setup_logging(level: str | None = None) -> None:
+    """Inicializa logging con formato consistente."""
+    chosen = (level or get_settings().log_level).upper()
+    logging.basicConfig(
+        level=chosen,
+        format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
